@@ -1,5 +1,6 @@
+import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import torch
@@ -16,6 +17,20 @@ router = APIRouter()
 VALID_MODELS = ["logistic_regression", "random_forest", "xgboost", "lstm"]
 _cache: dict[tuple, dict] = {}
 CACHE_TTL = 3600  # 1 hour
+
+# Per-ticker locks so concurrent requests for the same ticker serialize their
+# yfinance downloads instead of racing and getting incomplete data.
+_yf_locks: dict[str, threading.Lock] = {}
+_yf_locks_mutex = threading.Lock()
+
+
+def _yf_download(ticker: str, **kwargs):
+    with _yf_locks_mutex:
+        if ticker not in _yf_locks:
+            _yf_locks[ticker] = threading.Lock()
+        lock = _yf_locks[ticker]
+    with lock:
+        return yf.download(ticker, **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -83,7 +98,7 @@ def _predict_rows(
 
 def _fetch_and_compute(ticker: str) -> "pd.DataFrame":
     """Fetch ~120 days of live data and compute features."""
-    raw = yf.download(ticker, period="120d", auto_adjust=True, progress=False)
+    raw = _yf_download(ticker, period="120d", auto_adjust=True, progress=False)
     if raw.empty:
         raise HTTPException(status_code=404, detail=f"No data found for ticker '{ticker}'")
     import pandas as pd
@@ -149,9 +164,17 @@ def get_history(
     if model not in VALID_MODELS:
         raise HTTPException(status_code=422, detail=f"Invalid model '{model}'. Choose from {VALID_MODELS}")
 
-    # Fetch extra data for rolling window warmup
-    fetch_days = days + 120
-    raw = yf.download(ticker, period=f"{fetch_days}d", auto_adjust=True, progress=False)
+    # Fetch extra data for rolling window warmup using explicit dates (more
+    # reliable than period="Nd" strings for large N in yfinance)
+    end_date = datetime.now(timezone.utc)
+    start_date = end_date - timedelta(days=days + 180)
+    raw = _yf_download(
+        ticker,
+        start=start_date.strftime("%Y-%m-%d"),
+        end=end_date.strftime("%Y-%m-%d"),
+        auto_adjust=True,
+        progress=False,
+    )
     if raw.empty:
         raise HTTPException(status_code=404, detail=f"No data found for ticker '{ticker}'")
     import pandas as pd

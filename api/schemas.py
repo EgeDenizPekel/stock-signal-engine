@@ -35,7 +35,16 @@ class ModelMetrics(BaseModel):
     f1: float
     roc_auc: float
     sharpe: float
+    sortino: float
+    cagr: float
+    max_drawdown: float
+    win_rate: float
+    turnover: float
+    avg_gain: float
+    avg_loss: float
+    payoff_ratio: float
 
 
 class PerformanceResponse(BaseModel):
-    models: list[ModelMetrics]
+    models: list[ModelMetrics]      # test set (2024)
+    val_models: list[ModelMetrics]  # val set (2023)

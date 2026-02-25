@@ -7,6 +7,8 @@ router = APIRouter()
 
 @router.get("/models/performance", response_model=PerformanceResponse)
 def get_performance():
-    """Return test-set metrics for all trained models."""
-    models = [ModelMetrics(**m) for m in registry["metrics"]]
-    return PerformanceResponse(models=models)
+    """Return test-set and val-set metrics for all trained models."""
+    data = registry["metrics"]
+    models = [ModelMetrics(**m) for m in data["test"]]
+    val_models = [ModelMetrics(**m) for m in data["val"]]
+    return PerformanceResponse(models=models, val_models=val_models)

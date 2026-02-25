@@ -27,7 +27,7 @@ src/models/evaluate.py      Metrics + backtested Sharpe on held-out test set
 api/main.py (FastAPI)       Serve signals, history, and model performance
      │
      ▼
-frontend/ (React + Vite)    Dashboard — signal cards, price chart, model comparison [Phase 4]
+frontend/ (React + Vite)    Dashboard — signal card with expected value stats, price/returns/drawdown chart, model comparison table with val/test toggle and cost adjuster, limitations sidebar
 ```
 
 ---
@@ -48,8 +48,12 @@ frontend/ (React + Vite)    Dashboard — signal cards, price chart, model compa
 ## Setup
 
 ```bash
+# Backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+
+# Frontend
+cd frontend && npm install
 ```
 
 ---
@@ -77,6 +81,9 @@ python -m src.models.export
 
 # 7. Start the API
 uvicorn api.main:app --reload
+
+# 8. Start the React dashboard (in a separate terminal)
+cd frontend && npm run dev
 ```
 
 ---
@@ -88,7 +95,7 @@ uvicorn api.main:app --reload
 | GET | `/health` | Server status and loaded model names |
 | GET | `/signal/{ticker}?model=` | Current BUY/HOLD signal for a ticker |
 | GET | `/history/{ticker}?days=&model=` | OHLCV + signals for last N trading days (20–365) |
-| GET | `/models/performance` | Test-set metrics for all 4 models |
+| GET | `/models/performance` | Test-set (2024) and val-set (2023) metrics for all 4 models |
 
 `model` parameter accepts: `logistic_regression`, `random_forest`, `xgboost`, `lstm` (default: `logistic_regression`)
 
@@ -102,15 +109,17 @@ Training window: 2018–2022 · Validation: 2023 · Test: 2024
 
 ---
 
-## Model Results (Test Set — 2024)
+## Model Results (Test Set — 2024, no transaction costs)
 
-| Model | ROC-AUC | F1 | Sharpe |
-|---|---|---|---|
-| Logistic Regression | 0.615 | 0.327 | 1.050 |
-| LSTM | 0.611 | 0.522 | 1.233 |
-| XGBoost | 0.583 | 0.264 | 0.868 |
-| Random Forest | 0.596 | 0.210 | 0.614 |
-| Buy-and-hold baseline (SPY) | — | — | 1.913 |
+| Model | ROC-AUC | Sharpe | CAGR | Avg gain | Avg loss | Payoff |
+|---|---|---|---|---|---|---|
+| Logistic Regression | 0.615 | 1.050 | 15.6% | +1.57% | −1.17% | 1.28× |
+| LSTM | 0.611 | 1.233 | 47.3% | +1.26% | −1.17% | 0.81× |
+| XGBoost | 0.583 | 0.868 | 6.0% | +1.47% | −1.23% | 1.40× |
+| Random Forest | 0.596 | 0.614 | 6.0% | +1.05% | −0.85% | 3.02× |
+| Buy-and-hold baseline (SPY) | — | 1.913 | — | — | — | — |
+
+Avg gain/loss and payoff are per active (BUY) trading day on the test set, averaged across all 9 tickers.
 
 ### A note on predictive power
 
@@ -153,6 +162,12 @@ stock-signal-engine/
 │   └── routers/
 │       ├── signal.py         GET /signal/{ticker}, GET /history/{ticker}
 │       └── performance.py    GET /models/performance
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx           Root component; state + data fetching; three-column layout
+│   │   ├── lib/api.js        fetch wrappers for all API endpoints
+│   │   └── components/       SignalCard, PriceChart, ModelComparison, Dropdown, Limitations
+│   └── package.json
 ├── models/                   Exported model artifacts (ships with repo)
 ├── tests/
 │   └── test_api.py           Integration tests (20 tests; requires server on :8000)

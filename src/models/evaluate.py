@@ -25,7 +25,10 @@ from sklearn.metrics import (
 )
 from sklearn.preprocessing import StandardScaler
 
-from ..backtest.strategy import sharpe_from_signals, buy_and_hold_sharpe
+from ..backtest.strategy import (
+    daily_strategy_returns, sharpe_ratio, buy_and_hold_sharpe,
+    cagr, max_drawdown, sortino_ratio, win_rate, turnover,
+)
 from .train import (
     MLFLOW_EXPERIMENT,
     CALENDAR_COLS,
@@ -242,13 +245,11 @@ def main() -> None:
 
         metrics = compute_metrics(y_test_for_metrics, preds, proba_for_metrics)
 
-        # --- Per-ticker Sharpe, then average ---
-        sharpe_values = []
+        # --- Per-ticker trading metrics, then average ---
         unique_tickers = sorted(set(test_tickers))
+        sharpe_vals, sortino_vals, cagr_vals, dd_vals, wr_vals, to_vals = [], [], [], [], [], []
 
         if model_type == "lstm":
-            # For LSTM, predictions are already per-ticker sequences (concatenated).
-            # Reconstruct per-ticker slices by counting sequences per ticker.
             from .train import SEQUENCE_LENGTH as SEQ_LEN
             lstm_ticker_preds: dict[str, np.ndarray] = {}
             offset = 0
@@ -273,13 +274,23 @@ def main() -> None:
                 ticker_preds = preds[mask]
                 close = ticker_close[ticker]
 
-            if len(ticker_preds) == len(close):
-                s = sharpe_from_signals(ticker_preds, close)
-                sharpe_values.append(s)
+            if len(ticker_preds) != len(close):
+                continue
 
-        sharpe = float(np.mean(sharpe_values)) if sharpe_values else float("nan")
+            rets = daily_strategy_returns(ticker_preds, close)
+            sharpe_vals.append(sharpe_ratio(rets))
+            sortino_vals.append(sortino_ratio(rets))
+            cagr_vals.append(cagr(rets))
+            dd_vals.append(max_drawdown(rets))
+            wr_vals.append(win_rate(rets))
+            to_vals.append(turnover(ticker_preds))
 
-        metrics["sharpe"] = round(sharpe, 3)
+        metrics["sharpe"]       = round(float(np.nanmean(sharpe_vals))  if sharpe_vals  else 0.0, 3)
+        metrics["sortino"]      = round(float(np.nanmean(sortino_vals)) if sortino_vals else 0.0, 3)
+        metrics["cagr"]         = round(float(np.nanmean(cagr_vals))    if cagr_vals    else 0.0, 4)
+        metrics["max_drawdown"] = round(float(np.nanmean(dd_vals))      if dd_vals      else 0.0, 4)
+        metrics["win_rate"]     = round(float(np.nanmean(wr_vals))      if wr_vals      else 0.0, 4)
+        metrics["turnover"]     = round(float(np.nanmean(to_vals))      if to_vals      else 0.0, 4)
         metrics["model"] = model_type
         results.append(metrics)
 
@@ -297,15 +308,14 @@ def main() -> None:
 
     # --- Print table ---
     result_df = pd.DataFrame(results).set_index("model")
-    result_df = result_df[["accuracy", "precision", "recall", "f1", "roc_auc", "sharpe"]]
-
-    print("\n" + "=" * 70)
+    trading_cols = ["sharpe", "sortino", "cagr", "max_drawdown", "win_rate", "turnover", "roc_auc"]
+    print("\n" + "=" * 80)
     print("MODEL COMPARISON — TEST SET (2024)")
-    print("=" * 70)
-    print(result_df.to_string())
-    print("-" * 70)
-    print(f"Buy-and-hold Sharpe (baseline): {bh_sharpe:.3f}")
-    print("=" * 70 + "\n")
+    print("=" * 80)
+    print(result_df[trading_cols].to_string())
+    print("-" * 80)
+    print(f"Buy-and-hold Sharpe (SPY baseline): {bh_sharpe:.3f}")
+    print("=" * 80 + "\n")
 
 
 if __name__ == "__main__":
