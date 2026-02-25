@@ -4,6 +4,8 @@ An end-to-end ML system that ingests real stock market data, engineers predictiv
 
 The emphasis is on **ML system design** — not just a model in a notebook, but a production-style pipeline with proper data handling, experiment tracking, and a deployable API.
 
+![Dashboard overview](docs/screenshot-dashboard.png)
+
 ---
 
 ## Architecture
