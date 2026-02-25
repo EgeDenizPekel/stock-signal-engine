@@ -14,3 +14,4 @@ __pycache__/
 .DS_Store
 frontend/node_modules/
 frontend/dist/
+project.self.learning.material.md
