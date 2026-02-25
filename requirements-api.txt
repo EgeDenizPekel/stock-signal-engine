@@ -1,0 +1,12 @@
+# API runtime dependencies only (no MLflow, jupyter, matplotlib)
+yfinance==1.2.0
+pandas==2.2.3
+numpy==1.26.4
+ta==0.11.0
+scikit-learn==1.5.2
+xgboost==2.1.3
+torch==2.5.1
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+pydantic==2.10.4
+joblib==1.4.2
