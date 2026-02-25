@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   ResponsiveContainer,
   LineChart,
@@ -104,6 +105,14 @@ const DrawdownTooltip = ({ active, payload }) => {
 
 export default function PriceChart({ history, loading, days, onDaysChange, daysOptions }) {
   const [view, setView] = useState('price')
+  const [hoveredTab, setHoveredTab] = useState(null)
+  const [tipPos, setTipPos] = useState({ x: 0, y: 0 })
+
+  const handleTabEnter = (e, key) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    setTipPos({ x: rect.left + rect.width / 2, y: rect.top })
+    setHoveredTab(key)
+  }
 
   const priceData = history?.data?.map(p => ({
     ...p,
@@ -131,30 +140,28 @@ export default function PriceChart({ history, loading, days, onDaysChange, daysO
     },
   ]
 
+  const activeTip = tabs.find(t => t.key === hoveredTab)
+
   return (
+    <>
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
       {/* Header row */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex gap-1 bg-slate-800/60 rounded-lg p-0.5">
           {tabs.map(t => (
-            <div key={t.key} className="relative group">
-              <button
-                onClick={() => setView(t.key)}
-                className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
-                  view === t.key
-                    ? 'bg-slate-700 text-slate-100'
-                    : 'text-slate-500 hover:text-slate-300'
-                }`}
-              >
-                {t.label}
-              </button>
-              {/* Hover tooltip */}
-              <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-300 leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50 shadow-xl">
-                {t.tip}
-                {/* Arrow */}
-                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-700" />
-              </div>
-            </div>
+            <button
+              key={t.key}
+              onClick={() => setView(t.key)}
+              onMouseEnter={(e) => handleTabEnter(e, t.key)}
+              onMouseLeave={() => setHoveredTab(null)}
+              className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+                view === t.key
+                  ? 'bg-slate-700 text-slate-100'
+                  : 'text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              {t.label}
+            </button>
           ))}
         </div>
         <div className="flex gap-1">
@@ -311,5 +318,17 @@ export default function PriceChart({ history, loading, days, onDaysChange, daysO
         </>
       )}
     </div>
+
+    {hoveredTab && activeTip && createPortal(
+      <div
+        className="fixed pointer-events-none w-56 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-300 leading-relaxed shadow-xl z-[9999]"
+        style={{ left: tipPos.x, top: tipPos.y - 8, transform: 'translate(-50%, -100%)' }}
+      >
+        {activeTip.tip}
+        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-700" />
+      </div>,
+      document.body
+    )}
+    </>
   )
 }

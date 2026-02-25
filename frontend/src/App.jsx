@@ -118,8 +118,8 @@ export default function App() {
       </aside>
 
       {/* Main content */}
-      <div className="flex-1 min-w-0 overflow-y-auto">
-        <main className="max-w-3xl mx-auto px-8 py-8 space-y-6">
+      <div className="flex-1 min-w-0 overflow-y-auto relative z-10">
+        <main className="px-6 py-8 space-y-6">
           {error && (
             <div className="bg-red-950 border border-red-800 text-red-300 text-sm rounded-lg px-4 py-3">
               {error}
