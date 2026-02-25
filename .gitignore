@@ -6,7 +6,6 @@ project-plan-stock-signal-engine.md
 data/raw/
 data/processed/
 mlruns/
-models/
 .venv/
 __pycache__/
 *.pyc
