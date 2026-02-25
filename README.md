@@ -1,6 +1,6 @@
 # Stock Signal Engine
 
-An end-to-end ML system that ingests real stock market data, engineers predictive features, trains and tracks multiple models, and serves buy/sell/hold signals through a REST API with a React dashboard.
+An end-to-end ML system that ingests real stock market data, engineers predictive features, trains and tracks multiple models, and serves buy/hold signals through a REST API with a React dashboard.
 
 The emphasis is on **ML system design** — not just a model in a notebook, but a production-style pipeline with proper data handling, experiment tracking, and a deployable API.
 
@@ -27,7 +27,7 @@ src/models/evaluate.py      Metrics + backtested Sharpe on held-out test set
 api/main.py (FastAPI)       Serve signals, history, and model performance
      │
      ▼
-frontend/ (React + Vite)    Dashboard — signal cards, price chart, model comparison
+frontend/ (React + Vite)    Dashboard — signal cards, price chart, model comparison [Phase 4]
 ```
 
 ---
@@ -58,10 +58,10 @@ pip install -r requirements.txt
 
 ```bash
 # 1. Download OHLCV data for all tickers (skips if already cached)
-python src/data/ingest.py
+python -m src.data.ingest
 
 # 2. Feature engineering
-python src/data/features.py
+python -m src.data.features
 
 # 3. Train all models (logs to MLflow)
 python -m src.models.train
@@ -72,9 +72,25 @@ python -m src.models.evaluate
 # 5. Inspect all runs visually
 mlflow ui
 
-# 6. Start the API
+# 6. Export best model artifacts to models/
+python -m src.models.export
+
+# 7. Start the API
 uvicorn api.main:app --reload
 ```
+
+---
+
+## API Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/health` | Server status and loaded model names |
+| GET | `/signal/{ticker}?model=` | Current BUY/HOLD signal for a ticker |
+| GET | `/history/{ticker}?days=&model=` | OHLCV + signals for last N trading days (20–365) |
+| GET | `/models/performance` | Test-set metrics for all 4 models |
+
+`model` parameter accepts: `logistic_regression`, `random_forest`, `xgboost`, `lstm` (default: `logistic_regression`)
 
 ---
 
@@ -127,12 +143,19 @@ stock-signal-engine/
 │   ├── models/
 │   │   ├── train.py
 │   │   ├── evaluate.py
+│   │   ├── export.py
 │   │   └── lstm.py
 │   └── backtest/
 │       └── strategy.py
-├── api/                      FastAPI app (Phase 3)
-├── frontend/                 React dashboard (Phase 4)
-├── models/                   Saved model artifacts
+├── api/
+│   ├── main.py               App entry point; loads all model artifacts at startup
+│   ├── schemas.py            Pydantic response models
+│   └── routers/
+│       ├── signal.py         GET /signal/{ticker}, GET /history/{ticker}
+│       └── performance.py    GET /models/performance
+├── models/                   Exported model artifacts (ships with repo)
+├── tests/
+│   └── test_api.py           Integration tests (20 tests; requires server on :8000)
 ├── mlruns/                   MLflow tracking (gitignored)
 └── requirements.txt
 ```

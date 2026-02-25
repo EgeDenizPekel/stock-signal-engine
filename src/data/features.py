@@ -141,54 +141,74 @@ def _calendar_features(df: pd.DataFrame) -> pd.DataFrame:
     return feats
 
 
-def build_features(ticker: str) -> pd.DataFrame:
+def _assemble_features(raw_df: pd.DataFrame, ticker: str) -> pd.DataFrame:
     """
-    Full feature engineering pipeline for one ticker.
+    Core feature computation on a raw OHLCV DataFrame.
+    Shared by the batch pipeline and the live API.
 
-    All feature groups are computed, then shifted by 1 day so that the
-    feature values for row t represent information available *before* day t's
-    close. The target is the future return starting from day t's close.
+    Applies shift(1) to all features so that features[t] represent
+    information available before day t's close.
 
-    Returns a cleaned DataFrame with no NaN rows. Close price is not included —
-    reconstruct it from data/raw/ when needed for charting.
+    Does NOT include the target column — callers add it if needed.
+    Does NOT dropna — callers decide what to drop.
     """
-    df = _load_raw(ticker)
-
-    # Build target (no shift — this looks forward intentionally)
-    target = _build_target(df["close"])
-
-    # Build all feature groups on raw (un-shifted) data
     feature_blocks = [
-        _trend_features(df),
-        _momentum_features(df),
-        _volatility_features(df),
-        _volume_features(df),
-        _price_features(df),
-        _calendar_features(df),
+        _trend_features(raw_df),
+        _momentum_features(raw_df),
+        _volatility_features(raw_df),
+        _volume_features(raw_df),
+        _price_features(raw_df),
+        _calendar_features(raw_df),
     ]
     features = pd.concat(feature_blocks, axis=1)
-
-    # *** Anti-lookahead bias: shift all features forward by 1 day ***
-    # After shift(1), features[t] = indicators computed from data up to t-1.
-    # Target[t] = return from t to t+5. No future data leaks into features.
     features = features.shift(1)
 
-    # Assemble final DataFrame
-    out = pd.DataFrame(index=df.index)
+    out = pd.DataFrame(index=raw_df.index)
     out["ticker"] = ticker
     out = pd.concat([out, features], axis=1)
+    return out
+
+
+def build_features(ticker: str) -> pd.DataFrame:
+    """
+    Full feature engineering pipeline for one ticker (batch use).
+
+    Returns a cleaned DataFrame with no NaN rows and a target column.
+    Close price is not included — reconstruct from data/raw/ when needed.
+    """
+    df = _load_raw(ticker)
+    target = _build_target(df["close"])
+    out = _assemble_features(df, ticker)
     out["target"] = target
 
-    # Drop any row where the target is NaN (last FORWARD_DAYS rows) or any
-    # feature is NaN (rolling window warmup + the first row lost to shift(1))
     n_before = len(out)
     out = out.dropna()
-    n_dropped = n_before - len(out)
     log.info(
         "%s  features built: %d rows (%d dropped for NaN)",
-        ticker, len(out), n_dropped,
+        ticker, len(out), n_before - len(out),
     )
+    return out
 
+
+def compute_features_for_api(raw_df: pd.DataFrame, ticker: str) -> pd.DataFrame:
+    """
+    Compute features from a live-fetched OHLCV DataFrame for API use.
+
+    Expects raw_df to have lowercase OHLCV column names and a DatetimeIndex.
+    Returns feature rows with NaN rows dropped. No target column included.
+    Fetch at least 100 days of raw data to ensure rolling windows are populated.
+    """
+    raw_df = raw_df.copy()
+    raw_df.columns = [c.lower() for c in raw_df.columns]
+    raw_df = raw_df.sort_index()
+
+    out = _assemble_features(raw_df, ticker)
+    # Keep OHLCV alongside features for the history response
+    for col in ["open", "high", "low", "close", "volume"]:
+        if col in raw_df.columns:
+            out[col] = raw_df[col]
+
+    out = out.dropna(subset=[c for c in out.columns if c not in ("ticker", "open", "high", "low", "close", "volume")])
     return out
 
 
