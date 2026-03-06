@@ -140,31 +140,22 @@ These models have modest predictive signal — ROC-AUC of 0.61 is meaningfully a
 
 ---
 
-## Deployment
-
-The project is deployed end-to-end:
-
-- **Backend API:** [https://stock-signal-engine.duckdns.org](https://stock-signal-engine.duckdns.org)
-  AWS EC2 t3.micro · Docker Compose (FastAPI + nginx) · Let's Encrypt SSL
-- **Frontend:** [https://stock-signal-engine.vercel.app](https://stock-signal-engine.vercel.app)
-  Vercel · `VITE_API_BASE` points to the EC2 backend
-
-### Docker (local or production)
+## Docker
 
 ```bash
 # Build and start API + nginx
 docker-compose up --build
 
-# API is exposed at :8000 inside the container; nginx proxies :80/:443 → api:8000
+# API is exposed at :8000 inside the container; nginx proxies :80 → api:8000
 ```
 
-Key deployment files:
+Key Docker files:
 
 | File | Purpose |
 |---|---|
-| `Dockerfile` | Builds FastAPI image from `requirements-api.txt`; uses CPU-only PyTorch to fit on a t3.micro |
-| `docker-compose.yml` | Two services: `api` (FastAPI) and `nginx` (reverse proxy + SSL termination) |
-| `nginx.conf` | HTTP → HTTPS redirect; proxies to `api:8000`; references Let's Encrypt certs |
+| `Dockerfile` | Builds FastAPI image from `requirements-api.txt`; uses CPU-only PyTorch |
+| `docker-compose.yml` | Two services: `api` (FastAPI) and `nginx` (reverse proxy) |
+| `nginx.conf` | Proxies to `api:8000` |
 | `requirements-api.txt` | API-only deps (no MLflow, jupyter, matplotlib); keeps the image under 1 GB |
 
 ---
